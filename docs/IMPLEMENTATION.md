@@ -542,7 +542,8 @@ every call waiting, may run beside the usual two, and keeps the gap between
 child starts. Keys run one at a time, since two `sendKeyCode` calls running
 together can finish out of order. A key schedules no telemetry read of its own;
 an app it opens reaches Home Assistant through the foreground-app subscription.
-Each key's wait and run time is logged at debug level.
+Each key's wait and run time is logged at debug level. Play / Pause reads the
+player's state the same way, since the key it sends waits on that read.
 
 ## Older hardware capabilities (webOS 3.x and LCD models)
 

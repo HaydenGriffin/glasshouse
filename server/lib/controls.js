@@ -162,7 +162,8 @@ function injectKey(code, cb, delayMs) {
  * end is doing, and KEY_PLAY is a toggle over CEC, so that path just sends it.
  */
 function sendPlayPause(cb) {
-  luna('com.webos.service.acb/getForegroundAppInfo', {}, function (acb) {
+  // Urgent: a key press waits on this read, so it must not queue behind telemetry.
+  lunaUrgent('com.webos.service.acb/getForegroundAppInfo', {}, function (acb) {
     var pipe = (acb && Array.isArray(acb.acbs)) ? acb.acbs[0] : null;
     var external = !pipe || pipe.playerType === 'external input';
     var paused = !!(pipe && String(pipe.playStateNow) === 'paused');
