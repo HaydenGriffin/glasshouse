@@ -46,6 +46,27 @@ function checked(fn) {
   };
 }
 
+// 3b. Play/Pause is told when acb answers with no media pipe at all (Web Audio)
+function noPipe(t) {
+  function fail(e) { console.error('  ✗ ' + e.message); process.exit(1); }
+  t.readMediaState(function (m, none) {
+    try {
+      assert.strictEqual(m.state, 'idle');
+      assert.strictEqual(none, true, 'acb answered, with no pipe');
+    } catch (e) { fail(e); }
+    playing = true;
+    t.readMediaState(function (m2, none2) {
+      try {
+        assert.strictEqual(m2.state, 'playing');
+        assert.ok(!none2, 'a pipe');
+      } catch (e) { fail(e); }
+      playing = false;
+      console.log('  ✓ a read where acb has no media pipe says so');
+      webos9();
+    }, true);
+  }, true);
+}
+
 // 4. A TV without acb (a C2, webOS 9.2): com.webos.media's playState, as it answered there
 function webos9() {
   var appState = null;
@@ -105,7 +126,7 @@ t1.collectStats(checked(function (s) {
       assert.ok(/play_state/.test(t2.getCapabilitySignature()), 'not withdrawn by a restart');
       assert.strictEqual(s3.media.state, 'idle', 'idle with nothing playing, not unknown');
       console.log('  ✓ after a restart with nothing playing it stays, and reads idle');
-      webos9();
+      noPipe(t2);
     }));
   }));
 }));

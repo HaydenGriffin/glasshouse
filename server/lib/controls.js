@@ -18,10 +18,15 @@ var names = require('./names');
  * which is why it never worked.
  *
  * Over CEC to an external box, KEY_PLAY behaves as a toggle instead.
+ *
+ * KEY_PLAYPAUSE (164) is kept for apps with no media pipe, those playing
+ * through Web Audio, whose state can't be read and which toggle themselves.
+ * sendMediaKey never looks it up: 'playPause' goes to sendPlayPause.
  */
 var RCU_KEY_CODES = {
   play: 207,
   pause: 119,
+  playPause: 164,
   stop: 128,
   fastForward: 208,
   fastforward: 208,
@@ -175,10 +180,12 @@ function injectKey(code, cb, delayMs) {
  * No key toggles the built-in player, so this asks what it is doing and sends
  * the other one. An external input reports "playing" whatever the box on the
  * end is doing, and KEY_PLAY is a toggle over CEC, so that path just sends it;
- * so does nothing playing.
+ * so does nothing playing. An app with no pipe at all (Web Audio) can't be
+ * read, so it gets KEY_PLAYPAUSE and toggles itself: Play never paused it.
  */
 function sendPlayPause(cb) {
-  telemetry.readMediaState(function (media) {
+  telemetry.readMediaState(function (media, noPipe) {
+    if (noPipe) return injectKey(RCU_KEY_CODES.playPause, cb);
     var playing = !!(media && media.state === 'playing' && media.playerType !== 'external input');
     sendMediaKey(playing ? 'pause' : 'play', cb);
   }, true);

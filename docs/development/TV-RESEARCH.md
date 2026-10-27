@@ -994,6 +994,9 @@ and others' work on webOS 10
 - The B8 answers `com.webos.service.acb/getForegroundAppInfo` with an `acbs`
   pipeline list, each with `playStateNow` and `playerType` (`external input`
   for HDMI). The C2 has no such service ("Service does not exist").
+- On a C1 (webOS 6.4.0), apps that play through Web Audio, such as a
+  visualiser or a music player built as a web app, have no pipe: `acbs` is
+  an empty list while they play, so their state can't be read there.
 - On the C2, `com.webos.media/getForegroundAppInfo` gives
   `foregroundAppInfo: [{ appId, playState, type: "media", mediaId, windowId }]`:
   YouTube read `playing`, then `paused` after the remote's Pause key, and the

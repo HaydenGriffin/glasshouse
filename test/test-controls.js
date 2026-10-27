@@ -25,6 +25,7 @@ console.log('Running test-controls.js ...');
 
   assert.strictEqual(controls.RCU_KEY_CODES.play, 207);
   assert.strictEqual(controls.RCU_KEY_CODES.pause, 119);
+  assert.strictEqual(controls.RCU_KEY_CODES.playPause, 164);
 
   assert.deepEqual(controls.SLEEP_TIMER_VALUES, ['off', '10', '30', '60', '90', '120']);
   assert.deepEqual(controls.ENERGY_SAVING_VALUES, ['auto', 'off', 'min', 'med', 'max', 'screen_off']);
@@ -526,6 +527,44 @@ console.log('Running test-controls.js ...');
   assert.ok(/^rcu right: queued \d+ ms, luna 31 ms, ok$/.test(debugs[0]), debugs[0]);
   assert.ok(/^rcu home: queued \d+ ms, luna 31 ms, ok$/.test(debugs[1]), debugs[1]);
   console.log('  ✓ remote keys and Home use the urgent luna path and log their timing');
+})();
+
+// Play / Pause picks the key from what the foreground app's media reports
+(function testPlayPauseKey() {
+  var fs = require('fs');
+  var realOpen = fs.openSync;
+  var realWrite = fs.writeSync;
+  var realClose = fs.closeSync;
+  var pressed = [];
+  fs.openSync = function () { return 99; };
+  fs.closeSync = function () {};
+  fs.writeSync = function (fd, b) {
+    if (b.readUInt16LE(8) === 1 && b.readInt32LE(12) === 1) pressed.push(b.readUInt16LE(10));
+  };
+  function pressWith(media, noPipe) {
+    pressed = [];
+    controls.init({
+      config: { allowControl: true },
+      telemetry: { clearCache: function () {}, readMediaState: function (cb) { cb(media, noPipe); } },
+      luna: function (uri, payload, cb) { cb({ returnValue: true }); }
+    });
+    controls.sendMediaKey('playPause', function () {});
+    return pressed;
+  }
+  try {
+    assert.deepEqual(pressWith({ state: 'playing', playerType: 'MSE' }), [119], 'playing gets KEY_PAUSE');
+    assert.deepEqual(pressWith({ state: 'paused', playerType: 'MSE' }), [207], 'paused gets KEY_PLAY');
+    assert.deepEqual(pressWith({ state: 'playing', playerType: 'external input' }), [207],
+      'an external input gets KEY_PLAY, a toggle over CEC');
+    assert.deepEqual(pressWith({ state: 'idle', playerType: null }), [207], 'nothing playing in a pipe gets KEY_PLAY');
+    assert.deepEqual(pressWith(null), [207], 'no answer gets KEY_PLAY');
+    assert.deepEqual(pressWith({ state: 'idle', playerType: null }, true), [164], 'no pipe at all (Web Audio) gets KEY_PLAYPAUSE');
+  } finally {
+    fs.openSync = realOpen;
+    fs.writeSync = realWrite;
+    fs.closeSync = realClose;
+  }
+  console.log('  ✓ Play / Pause sends pause, play or, with no media pipe, KEY_PLAYPAUSE');
 })();
 
 console.log('ALL test-controls.js assertions passed!\n');
