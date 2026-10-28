@@ -25,7 +25,6 @@ console.log('Running test-controls.js ...');
 
   assert.strictEqual(controls.RCU_KEY_CODES.play, 207);
   assert.strictEqual(controls.RCU_KEY_CODES.pause, 119);
-  assert.strictEqual(controls.RCU_KEY_CODES.playPause, 164);
 
   assert.deepEqual(controls.SLEEP_TIMER_VALUES, ['off', '10', '30', '60', '90', '120']);
   assert.deepEqual(controls.ENERGY_SAVING_VALUES, ['auto', 'off', 'min', 'med', 'max', 'screen_off']);
@@ -541,13 +540,18 @@ console.log('Running test-controls.js ...');
   fs.writeSync = function (fd, b) {
     if (b.readUInt16LE(8) === 1 && b.readInt32LE(12) === 1) pressed.push(b.readUInt16LE(10));
   };
+  var foreground = 'io.github.haydengriffin.afterglow';
+  controls.init({
+    config: { allowControl: true },
+    telemetry: { clearCache: function () {}, readMediaState: function (cb) { cb(reading.media, reading.noPipe); } },
+    luna: function (uri, payload, cb) {
+      cb(uri === 'com.webos.applicationManager/getForegroundAppInfo' ? { returnValue: true, appId: foreground } : { returnValue: true });
+    }
+  });
+  var reading = {};
   function pressWith(media, noPipe) {
     pressed = [];
-    controls.init({
-      config: { allowControl: true },
-      telemetry: { clearCache: function () {}, readMediaState: function (cb) { cb(media, noPipe); } },
-      luna: function (uri, payload, cb) { cb({ returnValue: true }); }
-    });
+    reading = { media: media, noPipe: noPipe };
     controls.sendMediaKey('playPause', function () {});
     return pressed;
   }
@@ -558,13 +562,23 @@ console.log('Running test-controls.js ...');
       'an external input gets KEY_PLAY, a toggle over CEC');
     assert.deepEqual(pressWith({ state: 'idle', playerType: null }), [207], 'nothing playing in a pipe gets KEY_PLAY');
     assert.deepEqual(pressWith(null), [207], 'no answer gets KEY_PLAY');
-    assert.deepEqual(pressWith({ state: 'idle', playerType: null }, true), [164], 'no pipe at all (Web Audio) gets KEY_PLAYPAUSE');
+
+    var idle = { state: 'idle', playerType: null };
+    assert.deepEqual(pressWith(idle, true), [119], 'no pipe (Web Audio): KEY_PAUSE first');
+    assert.deepEqual(pressWith(idle, true), [207], 'then KEY_PLAY');
+    assert.deepEqual(pressWith(idle, true), [119], 'then KEY_PAUSE again');
+    pressWith({ state: 'playing', playerType: 'MSE' });
+    assert.deepEqual(pressWith(idle, true), [119], 'a pipe read in between starts again from KEY_PAUSE');
+
+    foreground = 'com.webos.app.hdmi3';
+    assert.deepEqual(pressWith(idle, true), [207], 'an input with nothing to read keeps KEY_PLAY');
+    assert.deepEqual(pressWith(idle, true), [207], 'every time');
   } finally {
     fs.openSync = realOpen;
     fs.writeSync = realWrite;
     fs.closeSync = realClose;
   }
-  console.log('  ✓ Play / Pause sends pause, play or, with no media pipe, KEY_PLAYPAUSE');
+  console.log('  ✓ Play / Pause sends pause or play from the pipe, and in turn with no pipe');
 })();
 
 console.log('ALL test-controls.js assertions passed!\n');

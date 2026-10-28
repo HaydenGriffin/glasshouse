@@ -38,8 +38,8 @@ function load() {
 
 // collectStats swallows what its callbacks throw, so a failure exits here.
 function checked(fn) {
-  return function (arg) {
-    try { fn(arg); } catch (e) {
+  return function () {
+    try { fn.apply(null, arguments); } catch (e) {
       console.error('  ✗ ' + e.message);
       process.exit(1);
     }
@@ -88,16 +88,23 @@ function webos9() {
       assert.strictEqual(s2.media.state, 'playing');
       assert.ok(/play_state/.test(t3.getCapabilitySignature()));
       appState = 'paused';
-      t3.readMediaState(checked(function (m) {
+      t3.readMediaState(checked(function (m, none) {
         assert.strictEqual(m.state, 'paused', 'read fresh for Play/Pause');
+        assert.ok(!none, 'an app with a pipe');
         appState = null;
         t3.expireStats();
         t3.collectStats(checked(function (s3) {
           assert.strictEqual(s3.media.state, 'idle', 'nothing playing, as on an input');
           console.log('  ✓ without acb, Player State comes from com.webos.media');
-          mockEnv.restore();
-          console.log('ALL test-play-state.js assertions passed!\n');
-          process.exit(0);
+          // A C1 (webOS 6.4) answered an empty list while Afterglow played through Web Audio
+          t3.readMediaState(checked(function (m2, none2) {
+            assert.strictEqual(m2.state, 'idle');
+            assert.strictEqual(none2, true, 'an empty list is no pipe');
+            console.log('  ✓ without acb, an empty com.webos.media list says there is no pipe');
+            mockEnv.restore();
+            console.log('ALL test-play-state.js assertions passed!\n');
+            process.exit(0);
+          }), true);
         }));
       }), true);
     }));

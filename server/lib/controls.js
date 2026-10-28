@@ -19,14 +19,12 @@ var names = require('./names');
  *
  * Over CEC to an external box, KEY_PLAY behaves as a toggle instead.
  *
- * KEY_PLAYPAUSE (164) is kept for apps with no media pipe, those playing
- * through Web Audio, whose state can't be read and which toggle themselves.
- * sendMediaKey never looks it up: 'playPause' goes to sendPlayPause.
+ * On a C1 (webOS 6.4) KEY_PLAYPAUSE never reaches a web app either, while
+ * KEY_PAUSE and KEY_PLAY arrive as keyCode 19 and 415.
  */
 var RCU_KEY_CODES = {
   play: 207,
   pause: 119,
-  playPause: 164,
   stop: 128,
   fastForward: 208,
   fastforward: 208,
@@ -180,15 +178,30 @@ function injectKey(code, cb, delayMs) {
  * No key toggles the built-in player, so this asks what it is doing and sends
  * the other one. An external input reports "playing" whatever the box on the
  * end is doing, and KEY_PLAY is a toggle over CEC, so that path just sends it;
- * so does nothing playing. An app with no pipe at all (Web Audio) can't be
- * read, so it gets KEY_PLAYPAUSE and toggles itself: Play never paused it.
+ * so does nothing playing. An app with no media pipe (one playing through Web
+ * Audio) can't be read, so it gets pause and play in turn.
  */
 function sendPlayPause(cb) {
   telemetry.readMediaState(function (media, noPipe) {
-    if (noPipe) return injectKey(RCU_KEY_CODES.playPause, cb);
+    if (noPipe) return sendUnreadPlayPause(cb);
+    lastUnreadKey = null;
     var playing = !!(media && media.state === 'playing' && media.playerType !== 'external input');
     sendMediaKey(playing ? 'pause' : 'play', cb);
   }, true);
+}
+
+/*
+ * The key Play / Pause last sent with no pipe to read. Pause comes first, as
+ * Play / Pause is mostly pressed on something playing. com.webos.media gives
+ * nothing for an external input either, so one in front keeps KEY_PLAY.
+ */
+var lastUnreadKey = null;
+function sendUnreadPlayPause(cb) {
+  luna('com.webos.applicationManager/getForegroundAppInfo', {}, function (fg) {
+    if (names.isInputAppId(fg && fg.appId)) return sendMediaKey('play', cb);
+    lastUnreadKey = lastUnreadKey === 'pause' ? 'play' : 'pause';
+    sendMediaKey(lastUnreadKey, cb);
+  });
 }
 
 function sendMediaKey(cmd, cb) {
